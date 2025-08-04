@@ -114,7 +114,7 @@ void eth_dma_reset(struct net_device *gmacdev)
 
     // maybe timeout
     if (i >= timeout)
-        plat_printf("gmac dma reset timeout\n");
+        eth_printf("gmac dma reset timeout\n");
 }
 
 // wakeup dma rx from suspend state
@@ -396,8 +396,8 @@ void eth_setup_tx_desc_queue(struct net_device *gmacdev, uint32_t desc_num)
     uint32_t dma_addr; // physical desc addr
     void *buffer; // buffer addr
 
-    desc = plat_malloc_align(sizeof(DmaDesc) * desc_num, 16);
-    dma_addr = plat_virt_to_phys((uint64_t)desc);
+    desc = eth_malloc_align(sizeof(DmaDesc) * desc_num, 16);
+    dma_addr = eth_virt_to_phys((uint64_t)desc);
 
     gmacdev->TxNext = 0;
     gmacdev->TxBusy = 0;
@@ -408,7 +408,7 @@ void eth_setup_tx_desc_queue(struct net_device *gmacdev, uint32_t desc_num)
     for (int i = 0; i < desc_num; i ++, desc ++)
     {
         // allocate tx buffer
-        buffer = plat_malloc_align(TX_BUF_SIZE, 16);
+        buffer = eth_malloc_align(TX_BUF_SIZE, 16);
 
         // init desc
         gmacdev->TxDesc[i] = desc;
@@ -428,8 +428,8 @@ void eth_setup_rx_desc_queue(struct net_device *gmacdev, uint32_t desc_num)
     uint32_t dma_addr; // physical desc addr
     void *buffer; // buffer addr
 
-    desc = plat_malloc_align(sizeof(DmaDesc) * desc_num, 16);
-    dma_addr = plat_virt_to_phys((uint64_t)desc);
+    desc = eth_malloc_align(sizeof(DmaDesc) * desc_num, 16);
+    dma_addr = eth_virt_to_phys((uint64_t)desc);
 
     gmacdev->RxBusy = 0;
 
@@ -439,9 +439,9 @@ void eth_setup_rx_desc_queue(struct net_device *gmacdev, uint32_t desc_num)
     for (int i = 0; i < desc_num; i ++, desc ++)
     {
         // allocate rx buffer
-        buffer = plat_malloc_align(RX_BUF_SIZE, 16);
+        buffer = eth_malloc_align(RX_BUF_SIZE, 16);
         // trans virtual addr to physical addr
-        dma_addr = plat_virt_to_phys((uint64_t)buffer);
+        dma_addr = eth_virt_to_phys((uint64_t)buffer);
 
         // init desc
         gmacdev->RxDesc[i] = desc;

@@ -281,9 +281,9 @@ pub fn eth_setup_tx_desc_queue(gmacdev: &mut net_device, desc_num: u32) {
     let mut dma_addr: u32 = 0;
     let mut buffer: u64 = 0;
 
-    desc = unsafe { plat_malloc_align((size_of::<DmaDesc>() * (desc_num as usize)) as u64, 16) }
+    desc = unsafe { eth_malloc_align((size_of::<DmaDesc>() * (desc_num as usize)) as u64, 16) }
         as *mut DmaDesc;
-    dma_addr = unsafe { plat_virt_to_phys(desc as u64) };
+    dma_addr = unsafe { eth_virt_to_phys(desc as u64) };
 
     gmacdev.TxNext = 0;
     gmacdev.TxBusy = 0;
@@ -291,7 +291,7 @@ pub fn eth_setup_tx_desc_queue(gmacdev: &mut net_device, desc_num: u32) {
     eth_mac_write_reg(gmacdev.DmaBase, DmaTxBaseAddr, dma_addr);
 
     for i in 0..desc_num {
-        buffer = unsafe { plat_malloc_align(2048, 16) };
+        buffer = unsafe { eth_malloc_align(2048, 16) };
         gmacdev.TxDesc[i as usize] = desc;
         gmacdev.TxBuffer[i as usize] = buffer;
 
@@ -311,17 +311,17 @@ pub fn eth_setup_rx_desc_queue(gmacdev: &mut net_device, desc_num: u32) {
     let mut dma_addr: u32 = 0;
     let mut buffer: u64 = 0;
 
-    desc = unsafe { plat_malloc_align((size_of::<DmaDesc>() * (desc_num as usize)) as u64, 16) }
+    desc = unsafe { eth_malloc_align((size_of::<DmaDesc>() * (desc_num as usize)) as u64, 16) }
         as *mut DmaDesc;
-    dma_addr = unsafe { plat_virt_to_phys(desc as u64) };
+    dma_addr = unsafe { eth_virt_to_phys(desc as u64) };
 
     gmacdev.RxBusy = 0;
 
     eth_mac_write_reg(gmacdev.DmaBase, DmaRxBaseAddr, dma_addr);
 
     for i in 0..desc_num {
-        buffer = unsafe { plat_malloc_align(2048, 16) };
-        dma_addr = unsafe { plat_virt_to_phys(buffer) };
+        buffer = unsafe { eth_malloc_align(2048, 16) };
+        dma_addr = unsafe { eth_virt_to_phys(buffer) };
         gmacdev.RxDesc[i as usize] = desc;
         gmacdev.RxBuffer[i as usize] = buffer;
 

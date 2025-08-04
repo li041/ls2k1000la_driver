@@ -5,7 +5,7 @@ use crate::eth_dev::*;
 use crate::platform::*;
 
 // 检查rgmii链路状态
-// platform_update_linkstate通知操作系统链路状态
+// eth_update_linkstate通知操作系统链路状态
 pub fn eth_phy_rgsmii_check(gmacdev: &mut net_device) {
     let mut value: u32 = 0;
     let mut status: u32 = 0;
@@ -14,7 +14,7 @@ pub fn eth_phy_rgsmii_check(gmacdev: &mut net_device) {
     status = value & (MacLinkStatus >> MacLinkStatusOff);
 
     if gmacdev.LinkStatus != status {
-        unsafe { platform_update_linkstate(gmacdev, status) };
+        unsafe { eth_update_linkstate(gmacdev, status) };
     }
 
     if status != 0 {
@@ -29,7 +29,7 @@ pub fn eth_phy_rgsmii_check(gmacdev: &mut net_device) {
             gmacdev.Speed = 10;
         }
         unsafe {
-            plat_printf(
+            eth_printf(
                 b"Link is Up - %u Mpbs / %s Duplex\n\0" as *const u8,
                 gmacdev.Speed,
                 if gmacdev.DuplexMode != 0 {
@@ -41,7 +41,7 @@ pub fn eth_phy_rgsmii_check(gmacdev: &mut net_device) {
         };
     } else {
         gmacdev.LinkStatus = 0;
-        unsafe { plat_printf(b"Link is Down\n\0" as *const u8) };
+        unsafe { eth_printf(b"Link is Down\n\0" as *const u8) };
     };
 }
 
@@ -58,7 +58,7 @@ pub fn eth_phy_init(gmacdev: &mut net_device) {
     match phy {
         0x0000010a => {
             unsafe {
-                plat_printf(
+                eth_printf(
                     b"probed ethernet phy YT8511H/C, id 0x%08x\n\0" as *const u8,
                     phy,
                 )
@@ -66,7 +66,7 @@ pub fn eth_phy_init(gmacdev: &mut net_device) {
         }
         _ => {
             unsafe {
-                plat_printf(
+                eth_printf(
                     b"probed unknown ethernet phy, id 0x%08x\n\0" as *const u8,
                     phy,
                 )
@@ -122,8 +122,8 @@ pub extern "C" fn eth_tx(gmacdev: &mut net_device, pbuf: u64) -> i32 {
     }
 
     buffer = gmacdev.TxBuffer[desc_idx as usize];
-    length = unsafe { plat_handle_tx_buffer(pbuf, buffer) };
-    dma_addr = unsafe { plat_virt_to_phys(buffer) };
+    length = unsafe { eth_handle_tx_buffer(pbuf, buffer) };
+    dma_addr = unsafe { eth_virt_to_phys(buffer) };
 
     txdesc.status |= DescOwnByDma | DescTxIntEnable | DescTxLast | DescTxFirst;
     txdesc.length = length << DescSize1Shift & DescSize1Mask;
@@ -135,7 +135,7 @@ pub extern "C" fn eth_tx(gmacdev: &mut net_device, pbuf: u64) -> i32 {
 
     gmacdev.TxNext = if is_last { 0 } else { desc_idx + 1 };
 
-    unsafe { sync_dcache() };
+    unsafe { eth_sync_dcache() };
 
     eth_gmac_resume_dma_tx(gmacdev);
 
@@ -160,13 +160,13 @@ pub extern "C" fn eth_rx(gmacdev: &mut net_device) -> u64 {
 
     if eth_is_rx_desc_valid(&rxdesc) {
         let mut length: u32 = eth_get_rx_length(&rxdesc);
-        let mut buffer: u64 = unsafe { plat_phys_to_virt(dma_addr) };
+        let mut buffer: u64 = unsafe { eth_phys_to_virt(dma_addr) };
 
         unsafe {
-            sync_dcache();
+            eth_sync_dcache();
         }
 
-        pbuf = unsafe { plat_handle_rx_buffer(buffer, length) };
+        pbuf = unsafe { eth_handle_rx_buffer(buffer, length) };
         gmacdev.rx_bytes += length as u64;
         gmacdev.rx_packets += 1;
     } else {
@@ -187,7 +187,7 @@ pub extern "C" fn eth_rx(gmacdev: &mut net_device) -> u64 {
 }
 
 // 中断处理程序
-// plat_rx_ready通知操作系统可以接收数据
+// eth_rx_ready通知操作系统可以接收数据
 // eth_handle_tx_over用于处理已经发送完的描述符
 #[unsafe(no_mangle)]
 pub extern "C" fn eth_irq(gmacdev: &mut net_device) {
@@ -202,10 +202,10 @@ pub extern "C" fn eth_irq(gmacdev: &mut net_device) {
     eth_dma_disable_interrupt_all(gmacdev);
 
     if dma_status & GmacPmtIntr != 0 {
-        unsafe { plat_printf(b"gmac pmt interrupt\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac pmt interrupt\n\0" as *const u8) };
     }
     if dma_status & GmacMmcIntr != 0 {
-        unsafe { plat_printf(b"gmac mmc interrupt\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac mmc interrupt\n\0" as *const u8) };
     }
     if dma_status & GmacLineIntfIntr != 0 {
         eth_mac_read_reg(gmacdev.MacBase, GmacInterruptStatus);
@@ -219,31 +219,31 @@ pub extern "C" fn eth_irq(gmacdev: &mut net_device) {
     eth_mac_write_reg(gmacdev.DmaBase, DmaStatus, dma_status);
 
     if dma_status & DmaIntBusError != 0 {
-        unsafe { plat_printf(b"gmac fatal bus error interrupt\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac fatal bus error interrupt\n\0" as *const u8) };
     }
     if dma_status & DmaIntRxStopped != 0 {
-        unsafe { plat_printf(b"gmac receive process stopped\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac receive process stopped\n\0" as *const u8) };
         eth_dma_enable_rx(gmacdev);
     }
     if dma_status & DmaIntRxNoBuffer != 0 {
-        unsafe { plat_printf(b"gmac receive buffer unavailable\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac receive buffer unavailable\n\0" as *const u8) };
         dma_int_enable &= !DmaIntRxNoBuffer;
         eth_gmac_resume_dma_rx(gmacdev);
-        unsafe { plat_rx_ready(gmacdev) };
+        unsafe { eth_rx_ready(gmacdev) };
     }
     if dma_status & DmaIntRxCompleted != 0 {
         dma_int_enable &= !DmaIntRxCompleted;
-        unsafe { plat_rx_ready(gmacdev) };
+        unsafe { eth_rx_ready(gmacdev) };
     }
     if dma_status & DmaIntTxUnderflow != 0 {
-        unsafe { plat_printf(b"gmac transmit underflow\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac transmit underflow\n\0" as *const u8) };
     }
     if dma_status & DmaIntRcvOverflow != 0 {
-        unsafe { plat_printf(b"gmac receive underflow\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac receive underflow\n\0" as *const u8) };
     }
     if dma_status & DmaIntTxNoBuffer != 0 {}
     if dma_status & DmaIntTxStopped != 0 {
-        unsafe { plat_printf(b"gmac transmit process stopped\n\0" as *const u8) };
+        unsafe { eth_printf(b"gmac transmit process stopped\n\0" as *const u8) };
     }
     if dma_status & DmaIntTxCompleted != 0 {
         eth_handle_tx_over(gmacdev);
@@ -255,7 +255,7 @@ pub extern "C" fn eth_irq(gmacdev: &mut net_device) {
 #[unsafe(no_mangle)]
 pub extern "C" fn eth_init(gmacdev: &mut net_device) -> i32 {
     // 在eth_init内或外，利用uncached地址初始化结构体的iobase
-    // gmacdev.iobase = plat_phys_to_uncached(0x40040000);
+    // gmacdev.iobase = eth_phys_to_uncached(0x40040000);
     gmacdev.MacBase = gmacdev.iobase + 0x0000;
     gmacdev.DmaBase = gmacdev.iobase + 0x1000;
     gmacdev.PhyBase = 0;
@@ -271,7 +271,7 @@ pub extern "C" fn eth_init(gmacdev: &mut net_device) -> i32 {
     eth_dma_reg_init(gmacdev);
     eth_gmac_reg_init(gmacdev);
 
-    unsafe { sync_dcache() };
+    unsafe { eth_sync_dcache() };
 
     eth_gmac_disable_mmc_irq(gmacdev);
     eth_dma_clear_curr_irq(gmacdev);
@@ -282,7 +282,7 @@ pub extern "C" fn eth_init(gmacdev: &mut net_device) -> i32 {
     eth_dma_enable_rx(gmacdev);
     eth_dma_enable_tx(gmacdev);
 
-    unsafe { plat_isr_install() };
+    unsafe { eth_isr_install() };
 
     return 0;
 }

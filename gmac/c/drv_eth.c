@@ -11,7 +11,7 @@ void eth_phy_rgsmii_check(struct net_device *gmacdev)
 
     // some OS require updating link status
     if (gmacdev->LinkStatus != status)
-        platform_update_linkstate(gmacdev, status);
+        eth_update_linkstate(gmacdev, status);
 
     // check the link status
     if (status) {
@@ -27,12 +27,12 @@ void eth_phy_rgsmii_check(struct net_device *gmacdev)
         else
             gmacdev->Speed = 10;
 
-        plat_printf("Link is Up - %u Mpbs / %s Duplex\n", gmacdev->Speed,
+        eth_printf("Link is Up - %u Mpbs / %s Duplex\n", gmacdev->Speed,
             gmacdev->DuplexMode ? "Full" : "Half");
     } else {
         // link is down
         gmacdev->LinkStatus = 0;
-        plat_printf("Link is Down\n");
+        eth_printf("Link is Down\n");
     }
 }
 
@@ -51,15 +51,15 @@ void eth_phy_init(struct net_device *gmacdev)
 
     switch (phy) {
     case 0x001cc915:
-        plat_printf("probed ethernet phy RTL8211E, id 0x%08x\n", phy);
+        eth_printf("probed ethernet phy RTL8211E, id 0x%08x\n", phy);
         break;
 
     case 0x0000010a:
-        plat_printf("probed ethernet phy YT8511H/C, id 0x%08x\n", phy);
+        eth_printf("probed ethernet phy YT8511H/C, id 0x%08x\n", phy);
         break;
 
     default:
-        plat_printf("probed unknown ethernet phy, id 0x%08x\n", phy);
+        eth_printf("probed unknown ethernet phy, id 0x%08x\n", phy);
         break;
     }
 }
@@ -80,13 +80,13 @@ int eth_tx(struct net_device *gmacdev, uint64_t pbuf)
     // 如果desc由dma持有，说明满了
     if (eth_get_desc_owner(txdesc))
     {
-        // plat_printf("[eth_tx] tx desc is full\n");
+        // eth_printf("[eth_tx] tx desc is full\n");
         return -1;
     }
 
     buffer = gmacdev->TxBuffer[desc_idx];
-    length = plat_handle_tx_buffer(pbuf, (uint64_t)buffer);
-    dma_addr = plat_virt_to_phys((uint64_t)buffer);
+    length = eth_handle_tx_buffer(pbuf, (uint64_t)buffer);
+    dma_addr = eth_virt_to_phys((uint64_t)buffer);
 
     // set desc
     txdesc->status |= (DescOwnByDma | DescTxIntEnable | DescTxLast | DescTxFirst);
@@ -96,7 +96,7 @@ int eth_tx(struct net_device *gmacdev, uint64_t pbuf)
 
     gmacdev->TxNext = is_last ? 0 : (desc_idx + 1);
 
-    sync_dcache();
+    eth_sync_dcache();
 
     // start tx
     eth_gmac_resume_dma_tx(gmacdev);
@@ -116,7 +116,7 @@ uint64_t eth_rx(struct net_device *gmacdev)
     // 恢复rx中断并退出
     if (eth_is_desc_empty(rxdesc) || eth_get_desc_owner(rxdesc))
     {
-        // plat_printf("[eth_rx] no rx desc available\n");
+        // eth_printf("[eth_rx] no rx desc available\n");
         eth_dma_enable_interrupt(gmacdev, DmaIntEnable);
         return 0;
     }
@@ -128,13 +128,13 @@ uint64_t eth_rx(struct net_device *gmacdev)
     if (eth_is_rx_desc_valid(rxdesc))
     {
         uint32_t length = eth_get_rx_length(rxdesc);
-        void *buffer = (void *)plat_phys_to_virt(dma_addr);
+        void *buffer = (void *)eth_phys_to_virt(dma_addr);
 
-        sync_dcache();
+        eth_sync_dcache();
 
         // 创建length长度的pbuf，将buffer拷贝到pbuf中
         // 或者实现zero-copy rx
-        pbuf = (void *)plat_handle_rx_buffer((uint64_t)buffer, length);
+        pbuf = (void *)eth_handle_rx_buffer((uint64_t)buffer, length);
 
         gmacdev->rx_bytes += length;
         gmacdev->rx_packets ++;
@@ -196,7 +196,7 @@ void eth_handle_tx_over(struct net_device *gmacdev)
 
 // 中断处理程序
 // gmac分为dma和gmac两部分中断，主要通过dma线触发
-// plat_rx_ready通知操作系统可以接收数据
+// eth_rx_ready通知操作系统可以接收数据
 // eth_handle_tx_over用于处理已经发送完的描述符
 void eth_irq(struct net_device *gmacdev)
 {
@@ -218,20 +218,20 @@ void eth_irq(struct net_device *gmacdev)
     // 28 gmac pmt interrupt
     if (dma_status & GmacPmtIntr)
     {
-        plat_printf("gmac pmt interrupt\n");
+        eth_printf("gmac pmt interrupt\n");
     }
 
     // 27 gmac mmc interrupt
     if (dma_status & GmacMmcIntr)
     {
-        plat_printf("gmac mmc interrupt\n");
+        eth_printf("gmac mmc interrupt\n");
     }
 
     // 26 gmac line interface interrupt
     // PCS or RGMII
     if (dma_status & GmacLineIntfIntr)
     {
-        // plat_printf("gmac line interface interrupt\n");
+        // eth_printf("gmac line interface interrupt\n");
 
         // PCS interrupt
         eth_mac_read_reg(gmacdev->MacBase, GmacInterruptStatus);
@@ -261,7 +261,7 @@ void eth_irq(struct net_device *gmacdev)
     // abnormal
     if (dma_status & DmaIntBusError)
     {
-        plat_printf("gmac fatal bus error interrupt\n");
+        eth_printf("gmac fatal bus error interrupt\n");
     }
 
     // 10 early transmit interrupt
@@ -272,7 +272,7 @@ void eth_irq(struct net_device *gmacdev)
     // abnormal
     if (dma_status & DmaIntRxStopped)
     {
-        plat_printf("gmac receive process stopped\n");
+        eth_printf("gmac receive process stopped\n");
         eth_dma_enable_rx(gmacdev);
     }
 
@@ -280,34 +280,34 @@ void eth_irq(struct net_device *gmacdev)
     // abnormal
     if (dma_status & DmaIntRxNoBuffer)
     {
-        plat_printf("gmac receive buffer unavailable\n");
+        eth_printf("gmac receive buffer unavailable\n");
         // try to recover
         dma_int_enable &= ~DmaIntRxNoBuffer;
         eth_gmac_resume_dma_rx(gmacdev);
-        plat_rx_ready(gmacdev);
+        eth_rx_ready(gmacdev);
     }
 
     // 6 receive interrupt (reception completed)
     // normal
     if (dma_status & DmaIntRxCompleted)
     {
-        //plat_printf("gmac dma rx normal\n");
+        //eth_printf("gmac dma rx normal\n");
         dma_int_enable &= ~DmaIntRxCompleted;
-        plat_rx_ready(gmacdev);
+        eth_rx_ready(gmacdev);
     }
 
     // 5 transmit underflow
     // abnormal
     if (dma_status & DmaIntTxUnderflow)
     {
-        plat_printf("gmac transmit underflow\n");
+        eth_printf("gmac transmit underflow\n");
     }
 
     // 4 receive overflow
     // abnormal
     if (dma_status & DmaIntRcvOverflow)
     {
-        plat_printf("gmac receive underflow\n");
+        eth_printf("gmac receive underflow\n");
     }
 
     // 2 transmit buffer unavailable
@@ -316,21 +316,21 @@ void eth_irq(struct net_device *gmacdev)
     // if nothing to send, dma will also raise this
     if (dma_status & DmaIntTxNoBuffer)
     {
-        // plat_printf("gmac transmit buffer unavailable\n");
+        // eth_printf("gmac transmit buffer unavailable\n");
     }
 
     // 1 transmit process stopped
     // abnormal
     if (dma_status & DmaIntTxStopped)
     {
-        plat_printf("gmac transmit process stopped\n");
+        eth_printf("gmac transmit process stopped\n");
     }
 
     // 0 transmit interrupt (transmit completed)
     // normal
     if (dma_status & DmaIntTxCompleted)
     {
-        // plat_printf("gmac dma tx normal\n");
+        // eth_printf("gmac dma tx normal\n");
         eth_handle_tx_over(gmacdev);
     }
 
@@ -341,7 +341,7 @@ void eth_irq(struct net_device *gmacdev)
 int eth_init(struct net_device *gmacdev)
 {
     // 需要在eth_init内或外初始化gmacdev->iobase
-    // iobase = plat_phys_to_uncached(0x40040000);
+    // iobase = eth_phys_to_uncached(0x40040000);
 
     // set mac reg address
     gmacdev->MacBase = (gmacdev->iobase + MACBASE);
@@ -374,7 +374,7 @@ int eth_init(struct net_device *gmacdev)
     eth_gmac_reg_init(gmacdev);
 
     // sync all desc and config
-    sync_dcache();
+    eth_sync_dcache();
 
     // disable all mmc interrupts
     eth_gmac_disable_mmc_irq(gmacdev);
@@ -394,7 +394,7 @@ int eth_init(struct net_device *gmacdev)
     eth_dma_enable_tx(gmacdev);
 
     // install isr
-    plat_isr_install();
+    eth_isr_install();
 
     return 0;
 }

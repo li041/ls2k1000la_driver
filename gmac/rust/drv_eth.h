@@ -46,22 +46,22 @@ uint64_t eth_rx(struct net_device *gmacdev);
 
 int32_t eth_tx(struct net_device *gmacdev, uint64_t pbuf);
 
-extern uint64_t plat_handle_rx_buffer(uint64_t buffer, uint32_t length);
+extern uint64_t eth_handle_rx_buffer(uint64_t buffer, uint32_t length);
 
-extern uint32_t plat_handle_tx_buffer(uint64_t p, uint64_t buffer);
+extern uint32_t eth_handle_tx_buffer(uint64_t p, uint64_t buffer);
 
-extern void plat_isr_install(void);
+extern void eth_isr_install(void);
 
-extern uint64_t plat_malloc_align(uint64_t size, uint32_t align);
+extern uint64_t eth_malloc_align(uint64_t size, uint32_t align);
 
-extern uint64_t plat_phys_to_virt(uint32_t pa);
+extern uint64_t eth_phys_to_virt(uint32_t pa);
 
-extern int plat_printf(const char *fmt, ...);
+extern int eth_printf(const char *fmt, ...);
 
-extern void plat_rx_ready(struct net_device *gmacdev);
+extern void eth_rx_ready(struct net_device *gmacdev);
 
-extern uint32_t plat_virt_to_phys(uint64_t va);
+extern uint32_t eth_virt_to_phys(uint64_t va);
 
-extern void platform_update_linkstate(struct net_device *gmacdev, uint32_t status);
+extern void eth_update_linkstate(struct net_device *gmacdev, uint32_t status);
 
-extern void sync_dcache(void);
+extern void eth_sync_dcache(void);
