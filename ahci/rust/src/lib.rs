@@ -1,10 +1,10 @@
 #![no_std]
 #![allow(dead_code, unused_assignments, unused_mut)]
 
-mod drv_ahci;
-mod libahci;
-mod libata;
-mod platform;
+pub mod drv_ahci;
+pub mod libahci;
+pub mod libata;
+pub mod platform;
 
 use core::panic::PanicInfo;
 
