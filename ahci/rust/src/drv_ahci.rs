@@ -208,40 +208,38 @@ fn ahci_port_base(base: u64, port: u8) -> u64 {
 // ahci初始化
 fn ahci_host_init(ahci_dev: &mut ahci_device) -> i32 {
     let mut tmp: u32 = 0;
-    let mut timeout: u32 = 1000;
+    let mut timeout: u32 = 0;
     let mut port_mmio: u64 = 0;
     let host_mmio: u64 = ahci_dev.mmio_base;
-
-    // enable ahci
-    tmp = ahci_readl(host_mmio + HOST_CTL);
-    if tmp & HOST_AHCI_EN == 0 {
-        let mut i: u32 = 0;
-        while i < 5 {
-            ahci_writel(tmp | HOST_AHCI_EN, host_mmio + HOST_CTL);
-            tmp = ahci_readl(host_mmio + HOST_CTL);
-            if tmp & HOST_AHCI_EN != 0 {
-                break;
-            }
-            unsafe { ahci_mdelay(5) };
-            i += 1;
-        }
-    }
 
     // reset ahci controller
     tmp = ahci_readl(host_mmio + HOST_CTL);
     if tmp & HOST_RESET == 0 {
         ahci_writel(tmp | HOST_RESET, host_mmio + HOST_CTL);
     }
-
     // wait for reset done
     loop {
         unsafe { ahci_mdelay(1) };
         tmp = ahci_readl(host_mmio + HOST_CTL);
-        if !(tmp & HOST_RESET != 0) {
+        if tmp & HOST_RESET == 0 {
             break;
         }
     }
 
+    // enable ahci
+    tmp = ahci_readl(host_mmio + HOST_CTL);
+    ahci_writel(tmp | HOST_AHCI_EN, host_mmio + HOST_CTL);
+    unsafe { ahci_mdelay(1) };
+
+    // init cap and pi
+    // beware if no firmware initialized before
+    // these bits are ready-only after write-once
+    tmp = HOST_CAP_MPS | HOST_CAP_SSS;
+    ahci_writel(tmp, host_mmio + HOST_CAP);
+    ahci_writel(0xf, host_mmio + HOST_PORTS_IMPL);
+    ahci_readl(host_mmio + HOST_PORTS_IMPL); // flush
+
+    // get ahci info
     ahci_dev.cap = ahci_readl(host_mmio + HOST_CAP);
     ahci_dev.cap2 = ahci_readl(host_mmio + HOST_CAP2);
     ahci_dev.version = ahci_readl(host_mmio + HOST_VERSION);
@@ -250,8 +248,7 @@ fn ahci_host_init(ahci_dev: &mut ahci_device) -> i32 {
 
     // init each port
     // for ls2kla, only 1 port available
-    let mut i: u8 = 0;
-    while i < ahci_dev.n_ports {
+    for i in 0..ahci_dev.n_ports {
         ahci_dev.port[i as usize].port_mmio = ahci_port_base(host_mmio, i);
         port_mmio = ahci_dev.port[i as usize].port_mmio;
 
@@ -290,7 +287,7 @@ fn ahci_host_init(ahci_dev: &mut ahci_device) -> i32 {
             tmp = ahci_readl(port_mmio + PORT_SCR_STAT);
             tmp &= 0xf;
             timeout -= 1;
-            if !(!(tmp == 0x3 || tmp == 0x1) && timeout != 0) {
+            if (tmp == 0x3 || tmp == 0x1) || timeout == 0 {
                 break;
             }
         }
@@ -318,7 +315,6 @@ fn ahci_host_init(ahci_dev: &mut ahci_device) -> i32 {
         if (tmp & 0xf) == 0x3 {
             ahci_dev.port_map_linkup |= 0x1 << i;
         }
-        i += 1;
     }
 
     // interrupt enable
@@ -343,8 +339,7 @@ fn ahci_fill_sg(ahci_dev: &ahci_device, port: u8, buf: *mut u8, mut buf_len: u32
         return 0;
     }
 
-    let mut i: u32 = 0;
-    while i < sg_count {
+    for i in 0..sg_count {
         let size: u32 = buf_len.min(max_bytes) - 1;
         let offset: isize = (i * max_bytes) as isize;
 
@@ -357,7 +352,6 @@ fn ahci_fill_sg(ahci_dev: &ahci_device, port: u8, buf: *mut u8, mut buf_len: u32
         }
 
         buf_len -= max_bytes;
-        i += 1;
     }
 
     return sg_count;
@@ -473,7 +467,6 @@ fn ahci_port_start(ahci_dev: &mut ahci_device, port: u8) -> i32 {
     let mut mem: u64;
     unsafe {
         mem = ahci_malloc_align(AHCI_PORT_PRIV_DMA_SZ as u64, 1024);
-        // ahci_memset(mem as *mut u8, 0, AHCI_PORT_PRIV_DMA_SZ as u64);
         (mem as *mut u8).write_bytes(0, AHCI_PORT_PRIV_DMA_SZ as usize);
     }
 
@@ -782,8 +775,7 @@ fn ahci_port_scan(ahci_dev: &mut ahci_device) -> i32 {
         return -1;
     }
 
-    let mut i: u8 = 0;
-    while i < ahci_dev.n_ports {
+    for i in 0..ahci_dev.n_ports {
         if (linkmap >> i & 0x1) != 0 {
             if ahci_port_start(ahci_dev, i) != 0 {
                 unsafe { ahci_printf(b"cannot start port %u\n\0" as *const u8, i as u32) };
@@ -791,8 +783,6 @@ fn ahci_port_scan(ahci_dev: &mut ahci_device) -> i32 {
             }
             ahci_dev.port_idx = i;
             break;
-        } else {
-            i += 1;
         }
     }
 

@@ -179,25 +179,10 @@ uint64_t ahci_port_base(uint64_t base, uint8_t port)
 // init ahci
 int ahci_host_init(struct ahci_device *ahci_dev)
 {
-    uint32_t tmp;
-    uint32_t timeout = 1000;
-    uint64_t port_mmio;
+    uint32_t tmp = 0;
+    uint32_t timeout = 0;
+    uint64_t port_mmio = 0;
     uint64_t host_mmio = ahci_dev->mmio_base;
-
-    // enable ahci
-    tmp = ahci_readl(host_mmio + HOST_CTL);
-    if (!(tmp & HOST_AHCI_EN))
-    {
-        for (uint32_t i = 0; i < 5; ++ i)
-        {
-            tmp |= HOST_AHCI_EN;
-            ahci_writel(tmp, host_mmio + HOST_CTL);
-            tmp = ahci_readl(host_mmio + HOST_CTL);
-            if (tmp & HOST_AHCI_EN)
-                break;
-            ahci_mdelay(5);
-        }
-    }
 
     // reset ahci controller
     tmp = ahci_readl(host_mmio + HOST_CTL);
@@ -210,6 +195,19 @@ int ahci_host_init(struct ahci_device *ahci_dev)
         tmp = ahci_readl(host_mmio + HOST_CTL);
     }
     while (tmp & HOST_RESET);
+
+    // enable ahci
+    tmp = ahci_readl(host_mmio + HOST_CTL);
+    ahci_writel(tmp | HOST_AHCI_EN, host_mmio + HOST_CTL);
+    ahci_mdelay(1);
+
+    // init cap and pi
+    // beware if no firmware initialized before
+    // these bits are ready-only after write-once
+    tmp = HOST_CAP_MPS | HOST_CAP_SSS;
+    ahci_writel(tmp, host_mmio + HOST_CAP);
+    ahci_writel(0xf, host_mmio + HOST_PORTS_IMPL);
+    ahci_readl(host_mmio + HOST_PORTS_IMPL); // flush
 
     // get cap and cap2
     ahci_dev->cap = ahci_readl(host_mmio + HOST_CAP);
